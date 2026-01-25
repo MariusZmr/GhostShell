@@ -1,0 +1,16 @@
+version: "3.8"
+
+services:
+  ghostshell:
+    build: .
+    container_name: ghostshell_app
+    # Montăm directorul curent în container pentru a edita codul live fără rebuild
+    volumes:
+      - .:/app
+    # Mod privilegiat necesar pentru manipulare procese și raw sockets
+    privileged: true
+    # Rețeaua host e ideală, dar pe Mac e limitată.
+    # Totuși, o lăsăm pentru acces mai ușor la interfețe.
+    network_mode: "host"
+    # Sau folosim bridge dacă network_mode host face probleme pe mac cu port binding
+    # network_mode: "bridge"

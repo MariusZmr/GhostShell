@@ -1,0 +1,19 @@
+# Python compilation archives
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+
+# Mac OS junk
+.DS_Store
+
+# Docker logs
+*.log
+
+# IDE specific settings (VS Code, JetBrains)
+.vscode/
+.idea/
