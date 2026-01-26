@@ -49,6 +49,13 @@ The application acts as a "Swiss Army Knife" for an Ethical Hacker who has alrea
 *   **Mechanism:** Reads the inode information (`st_atime`, `st_mtime`) from a reference file and applies it to the target using `os.utime`.
 *   **Result:** The file appears to have been created/modified years ago (e.g., 2018), helping it evade forensic analysis based on timeline sorting.
 
+### 7. Sniffer Module (sniff)
+**Command:** `python main.py sniff --interface eth0`
+
+*   **Function:** Intercepts network traffic in real-time.
+*   **Mechanism:** Uses **Raw Sockets** (`AF_PACKET`) to bypass the OS network stack and capture Ethernet frames directly from the driver. It decodes TCP/IP headers manually.
+*   **Result:** Can capture cleartext credentials (FTP, Telnet, HTTP) if an administrator logs in while the sniffer is running.
+
 ---
 
 ## 🛠️ Installation & Setup

