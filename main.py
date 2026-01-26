@@ -265,5 +265,75 @@ def audit():
         console.print(table)
         console.print("\n[green]System appears safe from high-profile kernel exploits.[/green]")
 
+# --- MODULE 6: TIMESTOMPING (Anti-Forensics) ---
+
+@app.command()
+def timestomp(
+    target: str = typer.Argument(..., help="Path to the file to modify"),
+    ref_file: str = typer.Option("/bin/bash", help="Reference file to copy timestamps FROM"),
+    date: str = typer.Option(None, help="Manual date (YYYY-MM-DD or 'YYYY-MM-DD HH:MM')")
+):
+    """
+    [ANTI-FORENSICS] File Timestamp Manipulation.
+    
+    Modifies the file's metadata. You can either copy from a system file OR set a manual date.
+    
+    Examples:
+    1. Clone /bin/bash: python main.py timestomp malware.py
+    2. Manual Date:     python main.py timestomp malware.py --date "2020-01-01"
+    """
+    console.print(Panel(f"Target: {target}", title="Timestomper", style="bold purple"))
+    
+    if not os.path.exists(target):
+        console.print(f"[red]Error: Target file '{target}' not found.[/red]")
+        return
+
+    from datetime import datetime
+
+    try:
+        if date:
+            # MANUAL MODE
+            try:
+                # Try full format with time
+                dt_obj = datetime.strptime(date, "%Y-%m-%d %H:%M")
+            except ValueError:
+                try:
+                    # Try just date (auto-set time to 00:00)
+                    dt_obj = datetime.strptime(date, "%Y-%m-%d")
+                except ValueError:
+                    console.print("[red]Error: Invalid format! Use 'YYYY-MM-DD' or 'YYYY-MM-DD HH:MM'[/red]")
+                    return
+            
+            # Convert to Unix Timestamp
+            timestamp = dt_obj.timestamp()
+            os.utime(target, (timestamp, timestamp))
+            console.print(f"[yellow]Manual Mode:[/yellow] Setting timestamp to [bold]{date}[/bold]")
+            
+        else:
+            # CLONE MODE (Default)
+            if not os.path.exists(ref_file):
+                console.print(f"[red]Error: Reference file '{ref_file}' not found.[/red]")
+                return
+            
+            st = os.stat(ref_file)
+            os.utime(target, (st.st_atime, st.st_mtime))
+            console.print(f"[cyan]Clone Mode:[/cyan] Copied timestamps from {ref_file}")
+        
+        # Validation
+        new_stat = os.stat(target)
+        
+        table = Table(title="Timestamp Update")
+        table.add_column("Type", style="cyan")
+        table.add_column("New Timestamp", style="green")
+        
+        table.add_row("Access Time", str(datetime.fromtimestamp(new_stat.st_atime)))
+        table.add_row("Modify Time", str(datetime.fromtimestamp(new_stat.st_mtime)))
+        
+        console.print(table)
+        console.print(f"\n[green]✔[/green] Operation successful!")
+        
+    except Exception as e:
+        console.print(f"[red]Operation failed: {e}[/red]")
+
 if __name__ == "__main__":
     app()

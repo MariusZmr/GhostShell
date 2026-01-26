@@ -42,6 +42,13 @@ The application acts as a "Swiss Army Knife" for an Ethical Hacker who has alrea
 *   **Function:** Performs a quick check of the kernel's security status.
 *   **Mechanism:** Compares the current kernel version (`uname -r`) against a database of critical vulnerabilities (e.g., Dirty Pipe - CVE-2022-0847).
 
+### 6. Timestomping Module (timestomp)
+**Command:** `python main.py timestomp my_script.py --ref_file "/bin/bash"`
+
+*   **Function:** Modifies a file's metadata to match a legitimate system file.
+*   **Mechanism:** Reads the inode information (`st_atime`, `st_mtime`) from a reference file and applies it to the target using `os.utime`.
+*   **Result:** The file appears to have been created/modified years ago (e.g., 2018), helping it evade forensic analysis based on timeline sorting.
+
 ---
 
 ## 🛠️ Installation & Setup
