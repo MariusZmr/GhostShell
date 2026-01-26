@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y \
     iputils-ping \
     procps \
     gcc \
+    netcat-traditional \
     && rm -rf /var/lib/apt/lists/*
 
 # Copiem fișierul de dependențe și le instalăm

