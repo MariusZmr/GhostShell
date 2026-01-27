@@ -179,7 +179,7 @@ def persist_access(payload):
             return
 
         new_cron = current_cron + entry
-        tmp_cron_file = "cron.tmp"
+        tmp_cron_file = "/tmp/cron.tmp"
         
         with open(tmp_cron_file, "w") as f:
             f.write(new_cron)
