@@ -1,29 +1,39 @@
-# Folosim o versiune ușoară de Python 3.10
-FROM python:3.10-slim
+# --- Stage 1: Builder (Compilare) ---
+FROM python:3.10-slim as builder
 
-# Setăm directorul de lucru în container
 WORKDIR /app
 
-# Instalăm dependențe de sistem necesare pentru networking și compilare (dacă extindem proiectul)
-# net-tools: pentru ifconfig/netstat
-# iputils-ping: pentru ping
-# procps: pentru comanda 'ps' ca să testăm procesul ghost
-RUN apt-get update && apt-get install -y \
+# Instalăm gcc doar pentru compilarea pachetelor Python (dacă e necesar)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    libc6-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+
+# Instalăm pachetele într-un director temporar (/install)
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+
+# --- Stage 2: Runtime (Imaginea Finală) ---
+FROM python:3.10-slim
+
+WORKDIR /app
+
+# Instalăm DOAR dependențele de runtime (fără gcc)
+# Folosim --no-install-recommends pentru a ține imaginea mică
+RUN apt-get update && apt-get install -y --no-install-recommends \
     net-tools \
     iputils-ping \
     procps \
-    gcc \
     netcat-traditional \
     cron \
     && rm -rf /var/lib/apt/lists/*
 
-# Copiem fișierul de dependențe și le instalăm
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Copiem bibliotecile Python deja instalate din stagiul de builder
+COPY --from=builder /install /usr/local
 
 # Copiem codul sursă
 COPY . .
 
-# Comanda default (poate fi suprascrisă)
-# Ține containerul activ pentru a putea intra în el
-CMD ["tail", "-f", "/dev/null"]
+# Comanda default: Pornim cron, simulăm boot-ul pentru persistență și ținem containerul activ
+CMD service cron start && python3 main.py simulate-boot && tail -f /dev/null

