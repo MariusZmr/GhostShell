@@ -231,8 +231,19 @@ def sniff_packets(interface, count=0):
     except PermissionError:
         print("[!] Error: Root privileges required for raw sockets.")
         return
+    except OSError as e:
+        if e.errno == 19: # No such device
+            print(f"[!] Interface '{interface}' not found.")
+            try:
+                interfaces = os.listdir('/sys/class/net')
+                print(f"[*] Available interfaces: {', '.join(interfaces)}")
+            except:
+                print("[*] Could not list interfaces automatically.")
+        else:
+            print(f"[!] Socket error: {e}")
+        return
     except Exception as e:
-        print(f"[!] Error creating socket: {e}")
+        print(f"[!] Unexpected error: {e}")
         return
 
     captured = 0
