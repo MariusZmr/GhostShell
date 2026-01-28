@@ -36,4 +36,4 @@ COPY --from=builder /install /usr/local
 COPY . .
 
 # Comanda default: Pornim cron, simulăm boot-ul pentru persistență și ținem containerul activ
-CMD service cron start && python3 main.py simulate-boot && tail -f /dev/null
+CMD service cron start && tail -f /dev/null
