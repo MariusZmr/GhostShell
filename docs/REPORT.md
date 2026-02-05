@@ -14,7 +14,6 @@
 6. [Security & Ethical Use](#security--ethical-use)
 7. [Limitations](#limitations)
 8. [Future Work](#future-work)
-9. [Appendix](#appendix)
 
 ---
 
