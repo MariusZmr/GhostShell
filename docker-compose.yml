@@ -9,8 +9,11 @@ services:
       - .:/app
     # Mod privilegiat necesar pentru manipulare procese și raw sockets
     privileged: true
-    # Rețeaua host e ideală, dar pe Mac e limitată.
-    # Totuși, o lăsăm pentru acces mai ușor la interfețe.
-    network_mode: "host"
-    # Sau folosim bridge dacă network_mode host face probleme pe mac cu port binding
-    # network_mode: "bridge"
+    
+    # Expose ports for Bind Shell and Reverse Shell testing
+    ports:
+      # - "4444:4444" # REMOVED: Conflict with Reverse Shell Listener on Host
+      - "5555:5555"   # KEEP: Required for Bind Shell (Host -> Container)
+
+    # Network mode host is problematic on Windows/Mac, using bridge with ports instead
+    # network_mode: "host"
