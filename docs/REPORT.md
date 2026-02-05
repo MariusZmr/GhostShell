@@ -42,7 +42,7 @@ The project aims to simulate a realistic C2 (Command & Control) scenario where a
 
 **Diagram / Screenshot Placeholder:**
 
-![Architecture Diagram](docs/images/architecture.png)
+![Architecture Diagram](images/architecture.png)
 
 ---
 
@@ -54,7 +54,7 @@ The project aims to simulate a realistic C2 (Command & Control) scenario where a
 
 **Lab Setup Screenshot:**
 
-![Lab Setup](docs/images/lab-setup.png)
+![Lab Setup](images/lab-setup.png)
 
 ---
 
@@ -66,7 +66,7 @@ Below are example sections for documenting features. Replace placeholders with y
 
 **Description:** Target initiates a connection to the operator.
 
-![Reverse Shell](docs/images/reverse-shell.png)
+![Reverse Shell](images/reverse-shell.png)
 
 **Notes:**
 - The agent successfully connected back to the listener.
@@ -79,7 +79,7 @@ Below are example sections for documenting features. Replace placeholders with y
 
 **Description:** Target listens; operator connects.
 
-![Bind Shell](docs/images/bind-shell.png)
+![Bind Shell](images/bind-shell.png)
 
 **Notes:**
 - The agent opened the specified port on the target.
@@ -92,7 +92,7 @@ Below are example sections for documenting features. Replace placeholders with y
 
 **Description:** Agent process name is customized to blend in.
 
-![Process Masquerading](docs/images/process-masquerading.png)
+![Process Masquerading](images/process-masquerading.png)
 
 **Notes:**
 - Process name changed to `kworker/u4:0` (or custom name).
@@ -105,7 +105,7 @@ Below are example sections for documenting features. Replace placeholders with y
 
 **Description:** Quick checks for kernel vulnerabilities and risky SUID binaries.
 
-![Local Audit](docs/images/audit.png)
+![Local Audit](images/audit.png)
 
 **Notes:**
 - Identified Kernel version and potential exploits (e.g., Dirty Pipe).
@@ -118,7 +118,7 @@ Below are example sections for documenting features. Replace placeholders with y
 
 **Description:** Captures cleartext traffic (root required).
 
-![Sniffer](docs/images/sniffer.png)
+![Sniffer](images/sniffer.png)
 
 **Notes:**
 - Captured raw packets on the specified interface.
@@ -131,7 +131,7 @@ Below are example sections for documenting features. Replace placeholders with y
 
 **Description:** Modifies file timestamps to match a reference.
 
-![Timestomping](docs/images/timestomp.png)
+![Timestomping](images/timestomp.png)
 
 **Notes:**
 - Modified Access and Modify times of the target file.
@@ -144,7 +144,7 @@ Below are example sections for documenting features. Replace placeholders with y
 
 **Description:** Agent is configured to run on system reboot.
 
-![Persistence](docs/images/persistence.png)
+![Persistence](images/persistence.png)
 
 **Notes:**
 - Created a systemd service or cron job for auto-start.
